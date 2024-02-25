@@ -8,17 +8,20 @@ public Plugin:myinfo =
 	name = "HvH.gg Weapon Selector", 
 	author = "imi-tat0r", 
 	description = "Allows players to set a preference for weapons after CS:GO inventory services got shut down.", 
-	version = "1.0.0"
+	version = "v1.0.0"
 };
 
 bool g_bPrefersR8[MAXPLAYERS + 1] = {false};
 bool g_bPrefersUSP[MAXPLAYERS + 1] = {false};
 bool g_bPrefersCZ[MAXPLAYERS + 1] = {false};
+bool g_bPrefersM4A1S[MAXPLAYERS + 1] = {false};
 int g_iPlayerNotified[MAXPLAYERS + 1] = {0};
 int r8Price = 600;
 int deaglePrice = 700;
 int p2000UspPrice = 200;
 int czTecPrice = 500;
+int m4a1sPrice = 2900;
+int m4a4Price = 3100;
 
 public void OnPluginStart()
 {
@@ -35,6 +38,9 @@ public void OnPluginStart()
 	RegConsoleCmd("tec9", Command_NotCZ);
 	RegConsoleCmd("fiveseven", Command_NotCZ);
 	RegConsoleCmd("57", Command_NotCZ);
+
+	RegConsoleCmd("m4a1s", Command_M4A1S);
+	RegConsoleCmd("m4a4", Command_M4A4);
 
 	HookEvent("player_spawn", Player_Spawn);
 }
@@ -66,24 +72,29 @@ public Action HandleSpawn(Handle timer, any userId)
 	if (g_iPlayerNotified[client] >= 1)
 		return Plugin_Stop;
 
-	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x10!deagle\x01 or \x10!r8\x01 at any time to set your preference.");
-	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x10!p2000\x01 or \x10!usp\x01 at any time to set your preference.");
-	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x10!tec9\x01/\x10!fiveseven\x01 or \x10!cz\x01 at any time to set your preference.");
+	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x07!deagle\x01 or \x07!r8\x01 at any time to set your preference.");
+	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x07!p2000\x01 or \x07!usp\x01 at any time to set your preference.");
+	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x07!tec9\x01/\x07!fiveseven\x01 or \x07!cz\x01 at any time to set your preference.");
 
 	if (g_bPrefersR8[client])
-		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x10R8 Revolver");
+		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07R8 Revolver");
 	else
-		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x10Desert Eagle");
+		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07Desert Eagle");
 	
 	if (g_bPrefersUSP[client])
-		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x10USP-S");
+		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07USP-S");
 	else
-		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x10P2000");
+		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07P2000");
 
 	if (g_bPrefersCZ[client])
-		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x10CZ75-Auto");
+		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07CZ75-Auto");
 	else
-		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x10Tec-9/Five-Seven");
+		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07Tec-9/Five-Seven");
+
+	if (g_bPrefersM4A1S[client])
+		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07M4A1-S");
+	else
+		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07M4A4");
 
 	g_iPlayerNotified[client]++;
 
@@ -120,6 +131,16 @@ public Action Command_NotCZ(int client, int args)
 	return Command_Handler("tec9", client, args);
 }
 
+public Action Command_M4A1S(int client, int args)
+{
+	return Command_Handler("m4a1s", client, args);
+}
+
+public Action Command_M4A4(int client, int args)
+{
+	return Command_Handler("m4a4", client, args);
+}
+
 public Action Command_Handler(const char[] command, int client, int args)
 {
 	if (args > 1)
@@ -153,6 +174,16 @@ public Action Command_Handler(const char[] command, int client, int args)
 		g_bPrefersUSP[client] = true;
 		weapon = "USP-S";
 	}
+	else if (StrEqual(command, "m4a1s"))
+	{
+		g_bPrefersM4A1S[client] = true;
+		weapon = "M4A1-S";
+	}
+	else if (StrEqual(command, "m4a4"))
+	{
+		g_bPrefersM4A1S[client] = false;
+		weapon = "M4A4";
+	}
 	else if (StrEqual(command, "cz"))
 	{
 		g_bPrefersCZ[client] = true;
@@ -164,7 +195,7 @@ public Action Command_Handler(const char[] command, int client, int args)
 		weapon = "Tec-9/Five-Seven";
 	}
 
-	char com[128] = "[\x07Hv\x02H\x01.gg] Current preference: \x10";
+	char com[128] = "[\x07Hv\x02H\x01.gg] Current preference: \x07";
 	StrCat(com, sizeof(com), weapon);
 	ReplyToCommand(client, com);
 
@@ -190,6 +221,10 @@ public Action CS_OnBuyCommand(int client, const char [] szWeapon)
 		return HandleBuyEvent(client, "weapon_usp_silencer", p2000UspPrice, g_bPrefersUSP[client]);
 	else if (StrEqual(str, "weapon_usp_silencer"))
 		return HandleBuyEvent(client, "weapon_hkp2000", p2000UspPrice, !g_bPrefersUSP[client]);
+	else if (StrEqual(str, "weapon_m4a4"))
+		return HandleBuyEvent(client, "weapon_m4a1_silencer", m4a1sPrice, !g_bPrefersM4A1S[client]);
+	else if (StrEqual(str, "weapon_m4a1_silencer"))
+		return HandleBuyEvent(client, "weapon_m4a4", m4a4Price, g_bPrefersM4A1S[client]);
 	else if (StrEqual(str, "weapon_tec9") || StrEqual(str, "weapon_fiveseven"))
 		return HandleBuyEvent(client, "weapon_cz75a", czTecPrice, g_bPrefersCZ[client]);
 	else if (StrEqual(str, "weapon_cz75a"))
@@ -291,6 +326,7 @@ void ResetUserPreference(int client)
 	g_bPrefersR8[client] = false;
 	g_bPrefersUSP[client] = false;
 	g_bPrefersCZ[client] = false;
+	g_bPrefersM4A1S[client] = false;
 	g_iPlayerNotified[client] = false;	
 }
 
