@@ -1,0 +1,82 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'README.MD'
+  workflow_dispatch:
+
+env:
+  PLUGIN_NAME: 'hvhgg_weapon_selector'
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract_version.outputs.version }}
+      exists: ${{ steps.check_version.outputs.exists }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version number from README.MD
+        id: extract_version
+        run: |
+          VERSION=$(grep -oP '(?<=CS:GO Weapon Selector \()[0-9]+\.[0-9]+\.[0-9]+' README.MD)
+          if [ -z "$VERSION" ]; then
+            echo "No version number found in README.MD. Exiting."
+            exit 1
+          fi
+          if ! grep -qP "version\s*=\s*\"v${VERSION//./\\.}\"" addons/sourcemod/scripting/$PLUGIN_NAME.sp; then
+            echo "myinfo version in $PLUGIN_NAME.sp does not match v$VERSION from README.MD. Exiting."
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if version already exists
+        id: check_version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # existing releases are tagged without a "v" prefix (e.g. 1.0.0)
+          if gh release view "${{ steps.extract_version.outputs.version }}" > /dev/null 2>&1; then
+            echo "Version ${{ steps.extract_version.outputs.version }} already exists. Skipping release."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  release:
+    needs: check-version
+    if: needs.check-version.outputs.exists != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION_NUMBER: ${{ needs.check-version.outputs.version }}
+    steps:
+      - name: Prepare env
+        shell: bash
+        run: echo "GITHUB_SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # the compiled .smx is committed with the source, so the addons folder is shipped as is
+      - name: Create release zip
+        run: |
+          test -f addons/sourcemod/plugins/$PLUGIN_NAME.smx
+          zip -r WeaponSelector-CSGO-$VERSION_NUMBER-$GITHUB_SHA_SHORT.zip addons
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          gh release create "$VERSION_NUMBER" \
+            --title "$VERSION_NUMBER" \
+            --target "$GITHUB_SHA" \
+            --notes "$(printf '## Changes\n- Auto-generated release\n%s' "$COMMIT_MESSAGE")" \
+            WeaponSelector-CSGO-$VERSION_NUMBER-$GITHUB_SHA_SHORT.zip

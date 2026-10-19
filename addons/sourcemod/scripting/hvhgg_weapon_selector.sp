@@ -8,7 +8,7 @@ public Plugin:myinfo =
 	name = "HvH.gg Weapon Selector", 
 	author = "imi-tat0r", 
 	description = "Allows players to set a preference for weapons after CS:GO inventory services got shut down.", 
-	version = "v1.0.0"
+	version = "v1.1.0"
 };
 
 bool g_bPrefersR8[MAXPLAYERS + 1] = {false};
@@ -69,12 +69,17 @@ public Action HandleSpawn(Handle timer, any userId)
 	if (GetClientTeam(client) <= CS_TEAM_SPECTATOR)
 		return Plugin_Stop;
 
+	// default CT pistol is always the P2000, swap it for free if USP-S is preferred
+	if (IsPlayerAlive(client) && g_bPrefersUSP[client] && GetClientTeam(client) == CS_TEAM_CT)
+		ReplaceSpawnPistol(client, "weapon_hkp2000", "weapon_usp_silencer");
+
 	if (g_iPlayerNotified[client] >= 1)
 		return Plugin_Stop;
 
 	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x07!deagle\x01 or \x07!r8\x01 at any time to set your preference.");
 	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x07!p2000\x01 or \x07!usp\x01 at any time to set your preference.");
 	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x07!tec9\x01/\x07!fiveseven\x01 or \x07!cz\x01 at any time to set your preference.");
+	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x07!m4a4\x01 or \x07!m4a1s\x01 at any time to set your preference.");
 
 	if (g_bPrefersR8[client])
 		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07R8 Revolver");
@@ -222,9 +227,9 @@ public Action CS_OnBuyCommand(int client, const char [] szWeapon)
 	else if (StrEqual(str, "weapon_usp_silencer"))
 		return HandleBuyEvent(client, "weapon_hkp2000", p2000UspPrice, !g_bPrefersUSP[client]);
 	else if (StrEqual(str, "weapon_m4a4"))
-		return HandleBuyEvent(client, "weapon_m4a1_silencer", m4a1sPrice, !g_bPrefersM4A1S[client]);
+		return HandleBuyEvent(client, "weapon_m4a1_silencer", m4a1sPrice, g_bPrefersM4A1S[client], CS_SLOT_PRIMARY);
 	else if (StrEqual(str, "weapon_m4a1_silencer"))
-		return HandleBuyEvent(client, "weapon_m4a4", m4a4Price, g_bPrefersM4A1S[client]);
+		return HandleBuyEvent(client, "weapon_m4a4", m4a4Price, !g_bPrefersM4A1S[client], CS_SLOT_PRIMARY);
 	else if (StrEqual(str, "weapon_tec9") || StrEqual(str, "weapon_fiveseven"))
 		return HandleBuyEvent(client, "weapon_cz75a", czTecPrice, g_bPrefersCZ[client]);
 	else if (StrEqual(str, "weapon_cz75a"))
@@ -250,7 +255,7 @@ public Action CS_OnGetWeaponPrice(int client, const char[] weapon, int& price)
 	return Plugin_Continue;
 }
 
-public Action HandleBuyEvent(int client, const char[] weapon_replace, int price_replace, bool prefers)
+Action HandleBuyEvent(int client, const char[] weapon_replace, int price_replace, bool prefers, int slot = CS_SLOT_SECONDARY)
 {
 	if (!prefers)
 		return Plugin_Continue;
@@ -264,7 +269,7 @@ public Action HandleBuyEvent(int client, const char[] weapon_replace, int price_
 		return Plugin_Handled;
 	else
 	{
-		DropSecondary(client);
+		DropWeaponInSlot(client, slot);
 		SetClientMoney(client, money - price_replace);
 		GivePlayerItem(client, weapon_replace);
 
@@ -295,14 +300,32 @@ public bool HasPlayerWeapon(int client, const char[] weapon)
 	return false;
 }
 
-public void DropSecondary(int client)
+public void DropWeaponInSlot(int client, int slot)
 {
-	int slot2 = GetPlayerWeaponSlot(client, 1)
+	int weapon = GetPlayerWeaponSlot(client, slot);
 
-	if (slot2 != -1)
+	if (weapon != -1)
 	{
-		CS_DropWeapon(client, slot2, false);
+		CS_DropWeapon(client, weapon, false);
 	}
+}
+
+public void ReplaceSpawnPistol(int client, const char[] weapon_from, const char[] weapon_to)
+{
+	int weapon = GetPlayerWeaponSlot(client, CS_SLOT_SECONDARY);
+	if (weapon == -1)
+		return;
+
+	char classname[32];
+	GetWeaponClassname(weapon, -1, classname, sizeof(classname));
+
+	if (!StrEqual(classname, weapon_from))
+		return;
+
+	// remove instead of drop so no free pistol is left on the ground
+	RemovePlayerItem(client, weapon);
+	AcceptEntityInput(weapon, "Kill");
+	GivePlayerItem(client, weapon_to);
 }
 
 public int GetClientMoney(int client)

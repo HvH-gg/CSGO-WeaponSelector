@@ -1,6 +1,6 @@
 ![Copyright ev0lve Digital](https://img.shields.io/badge/Copyright-ev0lve%20Digital-blue) ![GitHub License](https://img.shields.io/github/license/HvH-gg/CSGO-WeaponSelector) ![Issues](https://img.shields.io/github/issues/HvH-gg/CSGO-WeaponSelector) ![Stars](https://img.shields.io/github/stars/HvH-gg/CSGO-WeaponSelector)
 
-# [HvH.gg](https://hvh.gg) CS:GO Weapon Selector (1.0.0)
+# [HvH.gg](https://hvh.gg) CS:GO Weapon Selector (1.1.0)
 
 Our CS:GO Weapon Selector plugin is a simple plugin that allows players to select their weapon preference after the CS:GO inventory system was removed. This plugin is designed to be lightweight and easy to use.
 
