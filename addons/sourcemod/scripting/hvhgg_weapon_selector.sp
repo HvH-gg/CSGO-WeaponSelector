@@ -8,7 +8,7 @@ public Plugin:myinfo =
 	name = "HvH.gg Weapon Selector", 
 	author = "imi-tat0r", 
 	description = "Allows players to set a preference for weapons after CS:GO inventory services got shut down.", 
-	version = "v1.1.0"
+	version = "v1.2.0"
 };
 
 bool g_bPrefersR8[MAXPLAYERS + 1] = {false};
@@ -16,6 +16,10 @@ bool g_bPrefersUSP[MAXPLAYERS + 1] = {false};
 bool g_bPrefersCZ[MAXPLAYERS + 1] = {false};
 bool g_bPrefersM4A1S[MAXPLAYERS + 1] = {false};
 int g_iPlayerNotified[MAXPLAYERS + 1] = {0};
+ConVar g_cvDefaultR8;
+ConVar g_cvDefaultUSP;
+ConVar g_cvDefaultCZ;
+ConVar g_cvDefaultM4A1S;
 int r8Price = 600;
 int deaglePrice = 700;
 int p2000UspPrice = 200;
@@ -43,6 +47,12 @@ public void OnPluginStart()
 	RegConsoleCmd("m4a4", Command_M4A4);
 
 	HookEvent("player_spawn", Player_Spawn);
+
+	g_cvDefaultR8 = CreateConVar("hvh_default_r8", "0", "Whether players prefer the R8 Revolver over the Desert Eagle by default", _, true, 0.0, true, 1.0);
+	g_cvDefaultUSP = CreateConVar("hvh_default_usp", "0", "Whether players prefer the USP-S over the P2000 by default", _, true, 0.0, true, 1.0);
+	g_cvDefaultCZ = CreateConVar("hvh_default_cz", "0", "Whether players prefer the CZ75-Auto over the Tec-9/Five-Seven by default", _, true, 0.0, true, 1.0);
+	g_cvDefaultM4A1S = CreateConVar("hvh_default_m4a1s", "0", "Whether players prefer the M4A1-S over the M4A4 by default", _, true, 0.0, true, 1.0);
+	AutoExecConfig(true, "hvhgg_weapon_selector");
 }
 
 public void OnClientConnected(int client)
@@ -346,10 +356,10 @@ public void OnMapStart()
 
 void ResetUserPreference(int client)
 {
-	g_bPrefersR8[client] = false;
-	g_bPrefersUSP[client] = false;
-	g_bPrefersCZ[client] = false;
-	g_bPrefersM4A1S[client] = false;
+	g_bPrefersR8[client] = g_cvDefaultR8.BoolValue;
+	g_bPrefersUSP[client] = g_cvDefaultUSP.BoolValue;
+	g_bPrefersCZ[client] = g_cvDefaultCZ.BoolValue;
+	g_bPrefersM4A1S[client] = g_cvDefaultM4A1S.BoolValue;
 	g_iPlayerNotified[client] = false;	
 }
 
