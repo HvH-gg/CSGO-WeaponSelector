@@ -1,14 +1,15 @@
 #include <sourcemod>
 #include <sdktools>
 #include <cstrike>
+#include <clientprefs>
 
 
 public Plugin:myinfo = 
 { 
 	name = "HvH.gg Weapon Selector", 
-	author = "imi-tat0r", 
+	author = "imi-tat0r & NeDIAD", 
 	description = "Allows players to set a preference for weapons after CS:GO inventory services got shut down.", 
-	version = "v1.2.0"
+	version = "v1.3.0"
 };
 
 bool g_bPrefersR8[MAXPLAYERS + 1] = {false};
@@ -16,6 +17,15 @@ bool g_bPrefersUSP[MAXPLAYERS + 1] = {false};
 bool g_bPrefersCZ[MAXPLAYERS + 1] = {false};
 bool g_bPrefersM4A1S[MAXPLAYERS + 1] = {false};
 int g_iPlayerNotified[MAXPLAYERS + 1] = {0};
+int g_iPendingCookies[MAXPLAYERS + 1] = {0};
+Handle g_hR8Cookie;
+Handle g_hUSPCookie;
+Handle g_hCZCookie;
+Handle g_hM4A1SCookie;
+#define PREF_R8 1
+#define PREF_USP 2
+#define PREF_CZ 4
+#define PREF_M4A1S 8
 ConVar g_cvDefaultR8;
 ConVar g_cvDefaultUSP;
 ConVar g_cvDefaultCZ;
@@ -52,7 +62,21 @@ public void OnPluginStart()
 	g_cvDefaultUSP = CreateConVar("hvh_default_usp", "0", "Whether players prefer the USP-S over the P2000 by default", _, true, 0.0, true, 1.0);
 	g_cvDefaultCZ = CreateConVar("hvh_default_cz", "0", "Whether players prefer the CZ75-Auto over the Tec-9/Five-Seven by default", _, true, 0.0, true, 1.0);
 	g_cvDefaultM4A1S = CreateConVar("hvh_default_m4a1s", "0", "Whether players prefer the M4A1-S over the M4A4 by default", _, true, 0.0, true, 1.0);
+	g_hR8Cookie = RegClientCookie("hvhgg_weapon_r8", "R8 Revolver preference", CookieAccess_Private);
+	g_hUSPCookie = RegClientCookie("hvhgg_weapon_usp", "USP-S preference", CookieAccess_Private);
+	g_hCZCookie = RegClientCookie("hvhgg_weapon_cz", "CZ75-Auto preference", CookieAccess_Private);
+	g_hM4A1SCookie = RegClientCookie("hvhgg_weapon_m4a1s", "M4A1-S preference", CookieAccess_Private);
 	AutoExecConfig(true, "hvhgg_weapon_selector");
+
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsClientConnected(client))
+		{
+			ResetUserPreference(client);
+			if (!IsFakeClient(client) && AreClientCookiesCached(client))
+				OnClientCookiesCached(client);
+		}
+	}
 }
 
 public void OnClientConnected(int client)
@@ -63,6 +87,52 @@ public void OnClientConnected(int client)
 public void OnClientDisconnect(int client)
 {
 	ResetUserPreference(client);
+}
+
+public void OnClientCookiesCached(int client)
+{
+	if (!IsClientConnected(client) || IsFakeClient(client))
+		return;
+
+	SyncPreference(client, g_hR8Cookie, g_bPrefersR8[client], PREF_R8);
+	SyncPreference(client, g_hUSPCookie, g_bPrefersUSP[client], PREF_USP);
+	SyncPreference(client, g_hCZCookie, g_bPrefersCZ[client], PREF_CZ);
+	SyncPreference(client, g_hM4A1SCookie, g_bPrefersM4A1S[client], PREF_M4A1S);
+	g_iPendingCookies[client] = 0;
+
+	// cookies can arrive after player spawn
+	if (IsClientInGame(client) && GetClientTeam(client) == CS_TEAM_CT && IsPlayerAlive(client) && g_bPrefersUSP[client])
+		ReplaceSpawnPistol(client, "weapon_hkp2000", "weapon_usp_silencer");
+
+	if (IsClientInGame(client) && GetClientTeam(client) > CS_TEAM_SPECTATOR)
+		ShowPreferences(client);
+}
+
+void SyncPreference(int client, Handle cookie, bool &preference, int flag)
+{
+	if (g_iPendingCookies[client] & flag)
+	{
+		SetClientCookie(client, cookie, preference ? "1" : "0");
+		return;
+	}
+
+	char value[4];
+	GetClientCookie(client, cookie, value, sizeof(value));
+	if (StrEqual(value, "1"))
+		preference = true;
+	else if (StrEqual(value, "0"))
+		preference = false;
+}
+
+void SavePreference(int client, Handle cookie, bool preference, int flag)
+{
+	if (IsFakeClient(client))
+		return;
+
+	if (AreClientCookiesCached(client))
+		SetClientCookie(client, cookie, preference ? "1" : "0");
+	else
+		g_iPendingCookies[client] |= flag;
 }
 
 void Player_Spawn(Event event, const char[] name, bool dB)
@@ -79,12 +149,23 @@ public Action HandleSpawn(Handle timer, any userId)
 	if (GetClientTeam(client) <= CS_TEAM_SPECTATOR)
 		return Plugin_Stop;
 
+	// Apply saved preferences before replacing the spawn pistol. The cookie
+	// callback handles players who spawned while their cookies were loading.
+	if (!IsFakeClient(client) && !AreClientCookiesCached(client))
+		return Plugin_Stop;
+
 	// default CT pistol is always the P2000, swap it for free if USP-S is preferred
 	if (IsPlayerAlive(client) && g_bPrefersUSP[client] && GetClientTeam(client) == CS_TEAM_CT)
 		ReplaceSpawnPistol(client, "weapon_hkp2000", "weapon_usp_silencer");
 
+	ShowPreferences(client);
+	return Plugin_Stop;
+}
+
+void ShowPreferences(int client)
+{
 	if (g_iPlayerNotified[client] >= 1)
-		return Plugin_Stop;
+		return;
 
 	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x07!deagle\x01 or \x07!r8\x01 at any time to set your preference.");
 	PrintToChat(client, "[\x07Hv\x02H\x01.gg] Use \x07!p2000\x01 or \x07!usp\x01 at any time to set your preference.");
@@ -112,8 +193,6 @@ public Action HandleSpawn(Handle timer, any userId)
 		PrintToChat(client, "[\x07Hv\x02H\x01.gg] Current preference: \x07M4A4");
 
 	g_iPlayerNotified[client]++;
-
-	return Plugin_Stop;
 }
 
 public Action Command_Deagle(int client, int args)
@@ -158,6 +237,9 @@ public Action Command_M4A4(int client, int args)
 
 public Action Command_Handler(const char[] command, int client, int args)
 {
+	if (client <= 0 || !IsClientInGame(client))
+		return Plugin_Handled;
+
 	if (args > 1)
 	{
 		char com[128] = "[\x07Hv\x02H\x01.gg] Usage: !";
@@ -172,41 +254,49 @@ public Action Command_Handler(const char[] command, int client, int args)
 	if (StrEqual(command, "deagle"))
 	{
 		g_bPrefersR8[client] = false;
+		SavePreference(client, g_hR8Cookie, false, PREF_R8);
 		weapon = "Desert Eagle";
 	}
 	else if (StrEqual(command, "r8"))
 	{
 		g_bPrefersR8[client] = true;
+		SavePreference(client, g_hR8Cookie, true, PREF_R8);
 		weapon = "R8 Revolver";
 	}
 	else if (StrEqual(command, "p2000"))
 	{
 		g_bPrefersUSP[client] = false;
+		SavePreference(client, g_hUSPCookie, false, PREF_USP);
 		weapon = "P2000";
 	}
 	else if (StrEqual(command, "usp"))
 	{
 		g_bPrefersUSP[client] = true;
+		SavePreference(client, g_hUSPCookie, true, PREF_USP);
 		weapon = "USP-S";
 	}
 	else if (StrEqual(command, "m4a1s"))
 	{
 		g_bPrefersM4A1S[client] = true;
+		SavePreference(client, g_hM4A1SCookie, true, PREF_M4A1S);
 		weapon = "M4A1-S";
 	}
 	else if (StrEqual(command, "m4a4"))
 	{
 		g_bPrefersM4A1S[client] = false;
+		SavePreference(client, g_hM4A1SCookie, false, PREF_M4A1S);
 		weapon = "M4A4";
 	}
 	else if (StrEqual(command, "cz"))
 	{
 		g_bPrefersCZ[client] = true;
+		SavePreference(client, g_hCZCookie, true, PREF_CZ);
 		weapon = "CZ75-Auto";
 	}
 	else
 	{
 		g_bPrefersCZ[client] = false;
+		SavePreference(client, g_hCZCookie, false, PREF_CZ);
 		weapon = "Tec-9/Five-Seven";
 	}
 
@@ -348,12 +438,6 @@ public void SetClientMoney(int client, int money)
 	SetEntProp(client, Prop_Send, "m_iAccount", money);
 }
 
-public void OnMapStart()
-{
-	for (int i = 1; i <= MaxClients; i++)
-		ResetUserPreference(i);
-}
-
 void ResetUserPreference(int client)
 {
 	g_bPrefersR8[client] = g_cvDefaultR8.BoolValue;
@@ -361,6 +445,7 @@ void ResetUserPreference(int client)
 	g_bPrefersCZ[client] = g_cvDefaultCZ.BoolValue;
 	g_bPrefersM4A1S[client] = g_cvDefaultM4A1S.BoolValue;
 	g_iPlayerNotified[client] = false;	
+	g_iPendingCookies[client] = 0;
 }
 
 stock void GetWeaponClassname(int weapon, int index = -1, char[] classname, int maxLen)
